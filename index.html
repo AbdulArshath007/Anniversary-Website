@@ -514,23 +514,12 @@
 
     <!-- Scissor Mechanism -->
     <div id="scissor-wrapper" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
-      <!-- Progress Ring + Button wrapper -->
+      <!-- Button wrapper -->
       <div class="relative flex items-center justify-center">
-        <!-- SVG progress ring (sits behind the button) -->
-        <svg id="preload-svg" width="96" height="96" viewBox="0 0 96 96" class="absolute" style="transform:rotate(-90deg);">
-          <!-- Track circle -->
-          <circle cx="48" cy="48" r="40" fill="none" stroke="#e8c4ce" stroke-width="4"/>
-          <!-- Progress circle -->
-          <circle id="preload-ring" cx="48" cy="48" r="40" fill="none" stroke="#901a35" stroke-width="4"
-            stroke-linecap="round"
-            style="stroke-dasharray:251.3; stroke-dashoffset:251.3;"/>
-        </svg>
-        <!-- Percentage badge -->
-        <div id="preload-pct" class="absolute font-serif font-semibold text-[#901a35]" style="font-size:11px; top:-22px; left:50%; transform:translateX(-50%);">0%</div>
-        <!-- The scissor button — disabled until assets load -->
+        <!-- The scissor button -->
         <div id="scissor-btn"
-             style="background-color:#fdfbfb; pointer-events:none; opacity:0.45; cursor:not-allowed;"
-             class="border border-[#901a35] rounded-full p-4 shadow-[0_0_15px_rgba(144,26,53,0.15)] transition-all flex items-center justify-center group">
+             style="background-color:#fdfbfb; pointer-events:auto; opacity:1; cursor:pointer;"
+             class="border border-[#901a35] rounded-full p-4 shadow-[0_0_15px_rgba(144,26,53,0.15)] transition-all flex items-center justify-center group hover:scale-105 active:scale-95">
           <svg class="w-7 h-7 text-[#901a35] transform rotate-180 group-hover:-rotate-[195deg] transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="6" cy="6" r="3"></circle>
               <circle cx="6" cy="18" r="3"></circle>
@@ -542,7 +531,7 @@
       </div>
       <!-- Status text -->
       <div id="env-text" class="absolute top-full left-1/2 -translate-x-1/2 mt-6 font-cursive text-2xl md:text-3xl text-[#901a35] whitespace-nowrap" style="opacity:0.75;">
-        Loading...
+        Click to cut
       </div>
     </div>
   </div>
@@ -1028,73 +1017,10 @@
 
 
     // ═══════════════════════════════════════════════════
-    // ASSET PRELOADER  —  envelope acts as loading screen
-    // Only fast assets (images + audio) gate the unlock.
-    // Background videos buffer silently in the background.
+    // ENVELOPE OPENING MECHANISM
     // ═══════════════════════════════════════════════════
     const envContainer  = document.getElementById('env-container');
     const scissorBtn    = document.getElementById('scissor-btn');
-    const preloadRing   = document.getElementById('preload-ring');
-    const preloadPct    = document.getElementById('preload-pct');
-    const envText       = document.getElementById('env-text');
-    const CIRCUMFERENCE = 2 * Math.PI * 40; // r=40 → ≈251.3
-
-    // Only track FAST assets — images + audio (NOT videos, they're huge)
-    const polaroidImgs = Array.from(document.querySelectorAll('.flip-back img'));
-    const discAudio    = document.getElementById('disc-audio');
-    const fastAssets   = [...polaroidImgs, ...(discAudio ? [discAudio] : [])];
-    const TOTAL        = Math.max(fastAssets.length, 1); // at least 1 to avoid /0
-    let   loadedCount  = 0;
-    let   preloadDone  = false;
-    const startTime    = Date.now();
-    const MIN_DISPLAY  = 1500; // show loader for at least 1.5s even if assets load instantly
-
-    function onAssetReady() {
-      loadedCount = Math.min(loadedCount + 1, TOTAL);
-      const pct    = Math.round((loadedCount / TOTAL) * 100);
-      const offset = CIRCUMFERENCE * (1 - pct / 100);
-      if (preloadRing) preloadRing.style.strokeDashoffset = offset;
-      if (preloadPct)  preloadPct.textContent = pct + '%';
-      if (loadedCount >= TOTAL && !preloadDone) {
-        const elapsed = Date.now() - startTime;
-        const wait    = Math.max(0, MIN_DISPLAY - elapsed);
-        setTimeout(activateScissor, wait);
-      }
-    }
-
-    function activateScissor() {
-      if (preloadDone) return;
-      preloadDone = true;
-      // Fill ring to 100% then flash green → rose
-      if (preloadRing) { preloadRing.style.strokeDashoffset = '0'; preloadRing.style.stroke = '#28a745'; }
-      setTimeout(() => { if (preloadRing) preloadRing.style.stroke = '#901a35'; }, 700);
-      if (preloadPct) { preloadPct.textContent = '✓'; preloadPct.style.fontSize = '14px'; }
-      if (envText)    envText.textContent = 'Click to cut';
-      if (scissorBtn) {
-        scissorBtn.style.pointerEvents = 'auto';
-        scissorBtn.style.opacity       = '1';
-        scissorBtn.style.cursor        = 'pointer';
-        scissorBtn.classList.add('ready');
-      }
-    }
-
-    // Track polaroid images
-    polaroidImgs.forEach(img => {
-      if (img.complete) { onAssetReady(); return; }
-      img.onload  = onAssetReady;
-      img.onerror = onAssetReady;
-    });
-    // Track disc audio
-    if (discAudio) {
-      if (discAudio.readyState >= 3) { onAssetReady(); }
-      else {
-        discAudio.addEventListener('canplaythrough', onAssetReady, { once: true });
-        discAudio.addEventListener('error',          onAssetReady, { once: true });
-      }
-    }
-
-    // Safety valve: unlock after 4s no matter what
-    setTimeout(() => { if (!preloadDone) activateScissor(); }, 4000);
 
     // ─── Scissor Cut Animation ───────────────────────────────────────
     if (scissorBtn) {
@@ -1216,6 +1142,7 @@
     const discIconPlay = document.getElementById('disc-icon-play');
     const discIconPause = document.getElementById('disc-icon-pause');
     const musicDisc = document.getElementById('music-disc');
+    const discAudio = document.getElementById('disc-audio');
 
     if (discPlayBtn && discAudio) {
       discPlayBtn.addEventListener('click', () => {
