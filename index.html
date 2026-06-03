@@ -1029,6 +1029,8 @@
 
     // ═══════════════════════════════════════════════════
     // ASSET PRELOADER  —  envelope acts as loading screen
+    // Only fast assets (images + audio) gate the unlock.
+    // Background videos buffer silently in the background.
     // ═══════════════════════════════════════════════════
     const envContainer  = document.getElementById('env-container');
     const scissorBtn    = document.getElementById('scissor-btn');
@@ -1037,14 +1039,15 @@
     const envText       = document.getElementById('env-text');
     const CIRCUMFERENCE = 2 * Math.PI * 40; // r=40 → ≈251.3
 
-    // Collect all assets: background videos + polaroid images + disc audio
-    const bgVideos     = Array.from(document.querySelectorAll('video[data-bg]'));
+    // Only track FAST assets — images + audio (NOT videos, they're huge)
     const polaroidImgs = Array.from(document.querySelectorAll('.flip-back img'));
     const discAudio    = document.getElementById('disc-audio');
-    const allAssets    = [...bgVideos, ...polaroidImgs, ...(discAudio ? [discAudio] : [])];
-    const TOTAL        = allAssets.length; // typically 6 videos + 4 images + 1 audio = 11
+    const fastAssets   = [...polaroidImgs, ...(discAudio ? [discAudio] : [])];
+    const TOTAL        = Math.max(fastAssets.length, 1); // at least 1 to avoid /0
     let   loadedCount  = 0;
     let   preloadDone  = false;
+    const startTime    = Date.now();
+    const MIN_DISPLAY  = 1500; // show loader for at least 1.5s even if assets load instantly
 
     function onAssetReady() {
       loadedCount = Math.min(loadedCount + 1, TOTAL);
@@ -1052,16 +1055,22 @@
       const offset = CIRCUMFERENCE * (1 - pct / 100);
       if (preloadRing) preloadRing.style.strokeDashoffset = offset;
       if (preloadPct)  preloadPct.textContent = pct + '%';
-      if (loadedCount >= TOTAL && !preloadDone) activateScissor();
+      if (loadedCount >= TOTAL && !preloadDone) {
+        const elapsed = Date.now() - startTime;
+        const wait    = Math.max(0, MIN_DISPLAY - elapsed);
+        setTimeout(activateScissor, wait);
+      }
     }
 
     function activateScissor() {
+      if (preloadDone) return;
       preloadDone = true;
-      if (preloadRing) preloadRing.style.stroke = '#28a745'; // flash green
+      // Fill ring to 100% then flash green → rose
+      if (preloadRing) { preloadRing.style.strokeDashoffset = '0'; preloadRing.style.stroke = '#28a745'; }
       setTimeout(() => { if (preloadRing) preloadRing.style.stroke = '#901a35'; }, 700);
-      if (preloadPct)  { preloadPct.textContent = '✓'; preloadPct.style.fontSize = '14px'; }
-      if (envText)     envText.textContent = 'Click to cut';
-      if (scissorBtn)  {
+      if (preloadPct) { preloadPct.textContent = '✓'; preloadPct.style.fontSize = '14px'; }
+      if (envText)    envText.textContent = 'Click to cut';
+      if (scissorBtn) {
         scissorBtn.style.pointerEvents = 'auto';
         scissorBtn.style.opacity       = '1';
         scissorBtn.style.cursor        = 'pointer';
@@ -1069,29 +1078,23 @@
       }
     }
 
-    // Track each asset — handle already-loaded and future loads
-    bgVideos.forEach(v => {
-      if (v.readyState >= 3) { onAssetReady(); return; }
-      const h = () => onAssetReady();
-      v.addEventListener('canplaythrough', h, { once: true });
-      v.addEventListener('error',          h, { once: true });
-    });
+    // Track polaroid images
     polaroidImgs.forEach(img => {
       if (img.complete) { onAssetReady(); return; }
       img.onload  = onAssetReady;
       img.onerror = onAssetReady;
     });
+    // Track disc audio
     if (discAudio) {
       if (discAudio.readyState >= 3) { onAssetReady(); }
       else {
-        const h = () => onAssetReady();
-        discAudio.addEventListener('canplaythrough', h, { once: true });
-        discAudio.addEventListener('error',          h, { once: true });
+        discAudio.addEventListener('canplaythrough', onAssetReady, { once: true });
+        discAudio.addEventListener('error',          onAssetReady, { once: true });
       }
     }
 
-    // Safety valve: unlock scissor after 22s regardless of load state
-    setTimeout(() => { if (!preloadDone) { loadedCount = TOTAL; activateScissor(); } }, 22000);
+    // Safety valve: unlock after 4s no matter what
+    setTimeout(() => { if (!preloadDone) activateScissor(); }, 4000);
 
     // ─── Scissor Cut Animation ───────────────────────────────────────
     if (scissorBtn) {
